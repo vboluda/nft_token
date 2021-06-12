@@ -1,6 +1,7 @@
 
 var account="";
 var nftContract={};
+var ipfs={};
 
 async function init(){
   console.log("Initialization");
@@ -10,6 +11,8 @@ async function init(){
       alert("Metamask not installed. Please install Metamask.");
       return;
   }
+
+  ipfs= await Ipfs.create({host: 'ipfs.infura.io', port: '5001'});
 
   var accounts=await eth.request({ method: 'eth_requestAccounts' });
   
@@ -29,8 +32,9 @@ async function init(){
   console.log(`Account balance ${balance/100000000000000000}` )
 
   var elem=document.getElementById("mainaccount");
-  elem.innerText=`${account} (${balance/1000000000000000000})`;
-
+  if(elem){
+    elem.innerText=`${account} (${balance/1000000000000000000})`;
+  }
   nftContract= new window.web3.eth.Contract(artifact.nftVbvb.abi,artifact.nftVbvb.address)
   
 }
@@ -57,7 +61,6 @@ function previewFile() {
   }
 
   async function storeOnIPFS(imageContent,metadata){
-        var ipfs= await Ipfs.create({host: 'ipfs.infura.io', port: '5001'});
         var result=await ipfs.add(imageContent);
         console.log("Image ID: "+result.path);
         var metadata={
@@ -81,3 +84,60 @@ function previewFile() {
     console.log(`Send tx awward item [%s] id [%s]`,account,idUri);
     await nftContract.methods.awardItem(account,idUri).send({from:account});
   } 
+
+  async function retrieveIpfs(id){
+    if(!id.length || id.length==0){
+      return "";
+    }
+    
+    const stream = ipfs.cat(id)
+    let data = ''
+
+    for await (const chunk of stream) {
+      // chunks of data are returned as a Buffer, convert it back to a string
+      data += chunk.toString()
+    }
+    return data;
+  }
+
+  async function getNFTs(){
+    await init();
+    const lastId=await nftContract.methods.currentId().call();
+    console.log("Last NFT ID "+lastId);
+
+    var elem=document.getElementById("mainDiv");
+    var table   = document.createElement("table");
+    elem.appendChild(table);
+    var tblBody = document.createElement("tbody");
+    table.appendChild(tblBody);
+    for(let i=1;i<=lastId;i++){
+      let _uri=await nftContract.methods.tokenURI(i).call();
+      let owner=await nftContract.methods.ownerOf(i).call()
+      console.log(`ID [${i}] URI: ${_uri}`);
+      var metadata=await retrieveIpfs(_uri);
+      if(metadata.length==0){
+        continue;
+      }
+      console.log(`ID [${i}] URI: ${_uri} content: ${metadata}`);
+      var metadataObj=JSON.parse(metadata);
+      var imageData=await retrieveIpfs(metadataObj.imageID);
+      console.log("Retrieve image of length "+imageData.length)
+      
+      var row = document.createElement("tr");
+      var cell=document.createElement("tr");
+      var h3=document.createElement("h3");
+      var txtCell = document.createTextNode(metadataObj.name+" (Owned by: "+owner+")");
+      h3.appendChild(txtCell);
+      cell.appendChild(h3);
+      row.appendChild(cell); 
+      tblBody.appendChild(row);
+       
+      var irow = document.createElement("tr");
+      var icell=document.createElement("tr");
+      var img=document.createElement("img");
+      img.setAttribute('src', imageData);
+      icell.appendChild(img);
+      irow.appendChild(icell);
+      tblBody.appendChild(irow);
+    }
+  }
