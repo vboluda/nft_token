@@ -13,4 +13,4 @@ It will create an Artifact.js file in dapp/generated directory with ABI and addr
 
 Execute a HTTP Server in app/ directory and browse to 
 * createToken.html to create new nft
-* viewTolen to view generated tokens (Work in progress)
+* viewTolen to view generated tokens
